@@ -4,7 +4,7 @@ set(PROJECTNAME AluminumSpraying)
  
 add_definitions(-DDEBUGC)   
 aux_source_directory(src/. PRO_SOURCES)  
-set(PRO_INCLUDES src/AluminumSpraying.h src/paint_model.h src/json_model_parse.h src/cv_search_points.h src/cv_match_points.h src/pcl_filter_cloud.h src/parameters.h src/global.h src/Registration.h)
+set(PRO_INCLUDES src/AluminumSpraying.h src/paint_model.h src/json_model_parse.h src/pcl_filter_cloud.h src/parameters.h src/global.h src/cv_search_feature.h)
 
 #git version
 #执行git命令,获取hash值

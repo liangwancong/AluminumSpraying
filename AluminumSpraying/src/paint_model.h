@@ -45,6 +45,20 @@ struct PaintPoints
 	}
 };
 
+struct MatchMsg
+{
+	std::string picName;
+	double scale = 1;
+	std::string matchMat;
+	double matchAngle = 0;
+	MatchMsg() {}
+	MatchMsg(std::string _picName, double _scale, std::string _matchMat, double _matchAngle) {
+		picName = _picName;
+		scale = _scale;
+		matchMat = _matchMat;
+		matchAngle = _matchAngle;
+	}
+};
 
 struct MatchModel
 {

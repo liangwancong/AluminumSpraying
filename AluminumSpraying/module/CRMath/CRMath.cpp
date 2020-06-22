@@ -189,4 +189,35 @@ namespace CRMath {
 		system("pause");
 		return 0;
 	}
+
+	double  getV1V2Angle(const Eigen::Vector3f &V1, const Eigen::Vector3f &V2) {
+		double tem = V1.dot(V2);
+		double tep = sqrt(V1.dot(V1) * V2.dot(V2));
+		double angle = acos(tem / tep);
+		if (isnan(angle))
+		{
+			std::cout << "angle error" << std::endl;
+			return DBL_MAX;
+		}
+		return angle;
+	}
+	int getV12V2Tm(const Eigen::Vector3f &v1, const Eigen::Vector3f &v2, Eigen::Matrix4f &tm) {
+		//v1面-->v2面
+		//两个平面法向量的夹角
+		double angle = getV1V2Angle(v1, v2);
+		if (angle == DBL_MAX) {
+			return -1;
+		}
+		//求旋转轴
+		Eigen::Vector3f axis = v1.cross(v2);
+
+		//求旋转矩阵
+		Eigen::Matrix3f R = Eigen::Matrix3f::Identity();
+		Eigen::AngleAxisf v((float)angle, axis.normalized());
+		//Eigen::AngleAxisf v((float)angle, Eigen::Vector3f(0, 1, 0));
+		R = v.toRotationMatrix();
+		tm.block<3, 3>(0, 0) = R;
+		tm.block<3, 1>(0, 3) << 0, 0, 0;
+		return 0;
+	}
 }

@@ -600,4 +600,78 @@ namespace json2model {
 		return string;
 	}
 
+
+	char * createMsgsToJSON(vector<MatchMsg> match_msgs)
+	{
+		char *string = NULL;
+		cJSON *json_group = NULL;
+		cJSON *json_match_msgs = NULL;
+		cJSON *json_pic_name = NULL;
+		cJSON *json_scale= NULL;
+		cJSON *json_match_mat = NULL;
+		cJSON *json_match_angle = NULL;
+		cJSON *monitor = cJSON_CreateObject();
+		if (monitor == NULL)
+		{
+			goto end;
+		}
+
+		json_group = cJSON_CreateArray();
+		if (json_group == NULL)
+		{
+			goto end;
+		}
+		cJSON_AddItemToObject(monitor, "match_msgs", json_group);
+
+
+		for (size_t i = 0; i < match_msgs.size(); i++)
+		{
+
+			json_match_msgs = cJSON_CreateObject();
+			if (json_match_msgs == NULL)
+			{
+				goto end;
+			}
+			cJSON_AddItemToArray(json_group, json_match_msgs);
+
+			json_pic_name = cJSON_CreateString(match_msgs[i].picName.data());
+			if (json_pic_name == NULL)
+			{
+				goto end;
+			}
+			cJSON_AddItemToObject(json_match_msgs, "pic_name", json_pic_name);
+
+			json_scale = cJSON_CreateNumber(match_msgs[i].scale);
+			if (json_scale == NULL)
+			{
+				goto end;
+			}
+			cJSON_AddItemToObject(json_match_msgs, "scale", json_scale);
+
+			json_match_mat = cJSON_CreateString(match_msgs[i].matchMat.data());
+			if (json_match_mat == NULL)
+			{
+				goto end;
+			}
+			cJSON_AddItemToObject(json_match_msgs, "match_mat", json_match_mat);
+
+			json_match_angle = cJSON_CreateNumber(match_msgs[i].matchAngle);
+			if (json_match_angle == NULL)
+			{
+				goto end;
+			}
+			cJSON_AddItemToObject(json_match_msgs, "match_angle", json_match_angle);
+		}
+
+		string = cJSON_Print(monitor);
+		if (string == NULL)
+		{
+			fprintf(stderr, "Failed to print monitor.\n");
+		}
+
+	end:
+		cJSON_Delete(monitor);
+		return string;
+	}
+
 }

@@ -32,4 +32,8 @@ namespace PCLFilterHelper {
 	//欧式聚类
 	void euclideanClusterExtraction(PointCloudT::Ptr &cloud_in, std::vector<pcl::PointIndices> &cluster_indices_out, double tolerance, int min_cluster_size, int max_cluster_size);
 
+	void extractIndices(PointCloudT::Ptr &cloud, const pcl::PointIndices::Ptr &indices, const bool &negative);
+
+	void sacSegmentation(PointCloudT::Ptr &cloud, pcl::ModelCoefficients::Ptr coefficients, const int &model, const int &max_iterations, const double &threshold);
+
 }

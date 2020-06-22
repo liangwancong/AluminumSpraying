@@ -136,6 +136,33 @@ namespace PCLFilterHelper {
 		ec.setInputCloud(cloud_in);
 		ec.extract(cluster_indices_out);					//从点云中提取聚类，并将点云索引保存在cluster_indices中
 	}
+
+	void extractIndices(PointCloudT::Ptr &cloud, const pcl::PointIndices::Ptr &indices, const bool &negative) {
+		PointCloudT::Ptr cloudTmp(new PointCloudT);
+		*cloudTmp = *cloud;
+		pcl::ExtractIndices<pcl::PointXYZ> extract;
+		pcl::PointCloud<pcl::PointXYZ>::Ptr  cloud_p(new pcl::PointCloud<pcl::PointXYZ>);
+		cloud->clear();
+		extract.setInputCloud(cloudTmp);
+		extract.setIndices(indices);
+		extract.setNegative(negative);
+		extract.filter(*cloud);
+	}
+
+	void sacSegmentation(PointCloudT::Ptr &cloud, pcl::ModelCoefficients::Ptr coefficients, const int &model, const int &max_iterations, const double &threshold) {
+
+		pcl::PointIndices::Ptr indices(new pcl::PointIndices);
+
+		pcl::SACSegmentation<pcl::PointXYZ> seg;
+		seg.setOptimizeCoefficients(true);	//设置对估计的模型参数进行优化处理
+		seg.setModelType(model);//pcl::SACMODEL_PLANE
+		seg.setMethodType(pcl::SAC_RANSAC);	// 设置用哪个随机参数估计方法
+		seg.setMaxIterations(max_iterations);
+		seg.setDistanceThreshold(threshold);	//设置判断是否为模型内点的距离阈值
+		seg.setInputCloud(cloud);
+		seg.segment(*indices, *coefficients);
+		extractIndices(cloud, indices, false);
+	}
 }
  
 
