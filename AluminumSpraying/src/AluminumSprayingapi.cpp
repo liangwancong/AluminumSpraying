@@ -33,6 +33,6 @@ int WINAPI DllMain(
 }
 
 
-extern "C" _declspec(dllexport) int __cdecl getMatchMsgapi(char* output_result_json, char * cloud_front_file, char * cloud_file, char* model_file, double cloud_length = CloudLength, int cloud_pos = CloudPos, float head_offset = HeadOffset, float mid_offset = MidOffset, float tail_offset = TailOffset) {
-	return getMatchMsg(output_result_json, cloud_front_file, cloud_file, model_file, cloud_length, cloud_pos, head_offset, mid_offset, tail_offset);
+extern "C" _declspec(dllexport) int __cdecl getMatchMsgapi(char* output_result_json, char * cloud_front_file, char * cloud_file, char* model_name, double cloud_length = CloudLength, int cloud_pos = CloudPos, float head_offset = HeadOffset, float mid_offset = MidOffset, float tail_offset = TailOffset) {
+	return getMatchMsg(output_result_json, cloud_front_file, cloud_file, model_name, cloud_length, cloud_pos, head_offset, mid_offset, tail_offset);
 }

@@ -73,8 +73,18 @@ string getMatchMat(Mat &M) {
 	}
 	return matchMat;
 }
-
-int getMatchMsg(char* output_result_json, char * cloud_front_file, char * cloud_file, char* model_file, double cloud_length = CloudLength, int cloud_pos = CloudPos, float head_offset = HeadOffset, float mid_offset = MidOffset, float tail_offset = TailOffset) {
+void creatFolderInit() {
+	//createFolder(savePath);
+	//createFolder(saveCloudPath);
+	//createFolder(saveGroupPath);
+	//createFolder(saveModelImgPath);
+	createFolder(saveModelPath);
+	//createFolder(saveScanPath);
+	createFolder(logger::saveLoggerPath);
+}
+int getMatchMsg(char* output_result_json, char * cloud_front_file, char * cloud_file, char* model_name, double cloud_length = CloudLength, int cloud_pos = CloudPos, float head_offset = HeadOffset, float mid_offset = MidOffset, float tail_offset = TailOffset) {
+	creatFolderInit();
+	string model_file = saveModelPath+model_name+".key";
 	std::vector<PointCloudT::Ptr> originGroupClouds;
 	PointCloudT::Ptr cloud_real(new PointCloudT);
 	float min_x;
@@ -167,7 +177,8 @@ int getMatchMsg(char* output_result_json, char * cloud_front_file, char * cloud_
 	//投影各个直线
 	originGroupClouds.clear();
 	originGroupClouds = originGroupCloud_tmps;
-	vector<MatchMsg> match_msgs;
+	//vector<MatchMsg> match_msgs;
+	vector<PaintPoints> groupPaintPoints;
 	for (size_t i = 0; i < originGroupClouds.size(); i++) {
 		pcl::PointXYZ min_p, max_p;
 		pcl::getMinMax3D(*originGroupClouds[i], min_p, max_p);
@@ -197,7 +208,7 @@ int getMatchMsg(char* output_result_json, char * cloud_front_file, char * cloud_
 		pcl::transformPointCloud(*cloud, *cloud, tms[i]);
 		cvgeomerty::LINE line_match = cvgeomerty::LINE(Vec4f((*cloud)[0].z, (*cloud)[0].y, (*cloud)[1].z, (*cloud)[1].y));
 		//计算旋转矩阵,伸缩值
-		res = readModelLine(model_file, line);
+		res = readModelLine((char*)model_file.c_str(), line);
 		if (res == -1)
 		{
 			LOG(ERRORL) << "model line 文件不存在错误";
@@ -236,19 +247,39 @@ int getMatchMsg(char* output_result_json, char * cloud_front_file, char * cloud_
 			stable_point_model = Point((int)model_mid_point.x, (int)model_mid_point.y);
 			stable_point_match = Point((int)image_mid_point.x, (int)image_mid_point.y);
 		}
-		Mat M = getRotationMatrix2D(stable_point_model, -matchAngle, 1);
+		double distance_model = cvgeomerty::distance(line_model.start, line_model.end);
+		double distance_match = cvgeomerty::distance(line_match.start, line_match.end);
+		double scale = distance_match / distance_model;
+		Mat M = getRotationMatrix2D(stable_point_model, -matchAngle, scale);
 		M.at<double>(0, 2) = M.at<double>(0, 2) + stable_point_match.x - stable_point_model.x;
 		M.at<double>(1, 2) = M.at<double>(1, 2) + stable_point_match.y - stable_point_model.y;
 
 
-		double distance_model = cvgeomerty::distance(line_model.start, line_model.end);
-		double distance_match = cvgeomerty::distance(line_match.start, line_match.end);
-		double scale = distance_match / distance_model;
+
 		std::cout << "scale:" << scale << std::endl;
 		std::cout << "M:" << M << std::endl;
 		std::cout << "matchAngle:" << matchAngle << std::endl;
 		string match_mat = getMatchMat(M);
-		match_msgs.push_back(MatchMsg(pic_names[i], scale, match_mat, matchAngle));
+		//match_msgs.push_back(MatchMsg(pic_names[i], scale, match_mat, matchAngle));
+		vector<PaintPoint> corners;
+		Point2f center = Point2f(PICWIDTH_2, PICWIDTH_2);
+		corners.push_back(PaintPoint(center, 0, false));
+		PaintPoints paintPoints = PaintPoints();
+		Point stable_point(Point(0, 0));//小工件不存在稳定点
+		bool no_plane = true;
+		double matchVal = 0;
+		paintPoints.points = corners;
+		paintPoints.picName = pic_names[i];
+		paintPoints.havePlane = !no_plane;
+		paintPoints.matchAngle = matchAngle;
+		paintPoints.matchMat = match_mat;
+		paintPoints.matchName = string(model_name)+".key";
+		paintPoints.stablePoint = stable_point;
+		paintPoints.matchVal = matchVal;
+		paintPoints.maxLineStart = cv::Point2f(0, 0);
+		paintPoints.maxLineEnd = cv::Point2f(0, 0);
+		paintPoints.maxLineContentPoints = std::vector<PaintPoint>(0);
+		groupPaintPoints.push_back(paintPoints);
 #ifdef DEBUG		
 		//std::cout<<"cv_line.k:" << cv_line.k << std::endl;
 		//PointCloudT::Ptr cloud_line(new PointCloudT);
@@ -272,6 +303,10 @@ int getMatchMsg(char* output_result_json, char * cloud_front_file, char * cloud_
 		Mat p2(2, 1, CV_32FC1);
 		p2.at<float>(0, 0) = line_model.end.x;
 		p2.at<float>(1, 0) = line_model.end.y;
+		Mat p3(2, 1, CV_32FC1);
+		Point2f pmid = cvgeomerty::getMidPoint(line_model.start, line_model.end);
+		p3.at<float>(0, 0) = pmid.x;
+		p3.at<float>(1, 0) = pmid.y;
 		Mat M_r(2, 2, CV_32FC1);
 		M_r.at<float>(0, 0) = M.at<double>(0, 0);
 		M_r.at<float>(0, 1) = M.at<double>(0, 1);
@@ -280,6 +315,8 @@ int getMatchMsg(char* output_result_json, char * cloud_front_file, char * cloud_
 		std::cout << "M_r:" << M_r << std::endl;
 		Mat p11 = M_r * p1;
 		Mat p22 = M_r * p2;
+		Mat p33 = M_r * p3;
+		
 		//模板直线平移
 		std::cout << "M.at<double>(0, 2):" << M.at<double>(0, 2) << std::endl;
 		std::cout << "M.at<double>(1, 2):" << M.at<double>(1, 2) << std::endl;
@@ -287,62 +324,22 @@ int getMatchMsg(char* output_result_json, char * cloud_front_file, char * cloud_
 		p11.at<float>(1, 0) = p11.at<float>(1, 0) + M.at<double>(1, 2);
 		p22.at<float>(0, 0) = p22.at<float>(0, 0) + M.at<double>(0, 2);
 		p22.at<float>(1, 0) = p22.at<float>(1, 0) + M.at<double>(1, 2);
+		p33.at<float>(0, 0) = p33.at<float>(0, 0) + M.at<double>(0, 2);
+		p33.at<float>(1, 0) = p33.at<float>(1, 0) + M.at<double>(1, 2);
+
+		Point2f paint1 = Point2f(p11.at<float>(0, 0), p11.at<float>(1, 0));
+		Point2f paint2 = Point2f(p22.at<float>(0, 0), p22.at<float>(1, 0));
+		Point2f paint3 = Point2f(p33.at<float>(0, 0), p33.at<float>(1, 0));
 		//模板直线距离计算
 		double distance_model_r = cvgeomerty::distance(Point2f(p11.at<float>(0, 0), p11.at<float>(1, 0)), Point2f(p22.at<float>(0, 0), p22.at<float>(1, 0)));
 		std::cout << "distance_model:" << distance_model << std::endl;
 		std::cout << "distance_match:" << distance_match << std::endl;
 		std::cout << "distance_model_r:" << distance_model_r << std::endl;
 		cvgeomerty::LINE line_model_r = cvgeomerty::LINE(Vec4f(p11.at<float>(0, 0), p11.at<float>(1, 0), p22.at<float>(0, 0), p22.at<float>(1, 0)));
-		//喷涂点
-		Point2f paint1 = line_model.start;
-		Point2f paint2 = line_model.end;
-		//伸缩喷涂点
-		Point2f paint3 = line_model.end;
-		Point2f paint4 = line_model.end;
-		double distance_paint3 = scale * cvgeomerty::distance(paint1, line_model.end);
-		double distance_paint4 = scale * cvgeomerty::distance(paint2, line_model.end);
-		std::cout << "*****distance_paint3:" << distance_paint3 << std::endl;
-		std::cout << "*****distance_paint4:" << distance_paint4 << std::endl;
-		float angle = line_model.angle / 180.0*M_PI;
-		paint3.x += distance_paint3 * cos(angle);
-		paint3.y += distance_paint3 * sin(angle);
-		paint4.x += distance_paint4 * cos(angle);
-		paint4.y += distance_paint4 * sin(angle);
-		std::cout << "**paint3:" << paint3 << std::endl;
-		std::cout << "**paint4:" << paint4 << std::endl;
-		std::cout << "stable_point_model.y:" << stable_point_model.y << std::endl;
-		std::cout << " (paint3.y + paint4.y) / 2.0:****" << (paint3.y + paint4.y) / 2.0 << std::endl;
-		float transx = stable_point_model.x - (paint3.x + paint4.x) / 2.0;
-		float transy = stable_point_model.y - (paint3.y + paint4.y) / 2.0;
-		paint3.x += transx;
-		paint4.x += transx;
-		paint3.y += transy;
-		paint4.y += transy;
-		std::cout << "transx:" << transx << std::endl;
-		std::cout << "transy:" << transy << std::endl;
-		std::cout << "paint3:" << paint3 << std::endl;
-		std::cout << "paint4:" << paint4 << std::endl;
-		//旋转平移喷涂点
-		Mat p3(2, 1, CV_32FC1);
-		p3.at<float>(0, 0) = paint3.x;
-		p3.at<float>(1, 0) = paint3.y;
-		Mat p4(2, 1, CV_32FC1);
-		p4.at<float>(0, 0) = paint4.x;
-		p4.at<float>(1, 0) = paint4.y;
-		Mat p33 = M_r * p3;
-		Mat p44 = M_r * p4;
-		p33.at<float>(0, 0) = p33.at<float>(0, 0) + M.at<double>(0, 2);
-		p33.at<float>(1, 0) = p33.at<float>(1, 0) + M.at<double>(1, 2);
-		p44.at<float>(0, 0) = p44.at<float>(0, 0) + M.at<double>(0, 2);
-		p44.at<float>(1, 0) = p44.at<float>(1, 0) + M.at<double>(1, 2);
-		paint3.x = p33.at<float>(0, 0);
-		paint3.y = p33.at<float>(1, 0);
-		paint4.x = p44.at<float>(0, 0);
-		paint4.y = p44.at<float>(1, 0);
 
 		Vec4f plane_line;
 		Eigen::Affine3f tm;
-		string imagePath = savePointCloudCrossPic(originGroupClouds[i], min_x, max_x, plane_line, tm, i, LeftNoRPThresh, CloudPos, HeadOffset, MidOffset, TailOffset);
+		string imagePath = savePointCloudCrossPic(originGroupClouds[i], min_x, max_x, plane_line, tm, i, 60, CloudPos, HeadOffset, MidOffset, TailOffset);
 		if (imagePath == "") {
 			continue;
 		}
@@ -350,25 +347,61 @@ int getMatchMsg(char* output_result_json, char * cloud_front_file, char * cloud_
 		cv::line(src2, line_match.start, line_match.end, Scalar(rand() % 255, rand() % 255, rand() % 255), 2, LINE_AA);
 		cv::line(src2, line_model.start, line_model.end, Scalar(rand() % 255, rand() % 255, rand() % 255), 2, LINE_AA);
 		cv::line(src2, line_model_r.start, line_model_r.end, Scalar(rand() % 255, rand() % 255, rand() % 255), 2, LINE_AA);
-		circle(src2, paint1, 5, Scalar(0, 0, 255), 2, 8, 0);
-		circle(src2, paint2, 5, Scalar(0, 0, 255), 2, 8, 0);
-		circle(src2, paint3, 5, Scalar(0, 255, 0), 2, 8, 0);
-		circle(src2, paint4, 5, Scalar(0, 255, 0), 2, 8, 0);
+		cv::circle(src2, line_model.start, 5, Scalar(0, 0, 255), 2, 8, 0);
+		cv::circle(src2, line_model.end, 5, Scalar(0, 0, 255), 2, 8, 0);
+		cv::circle(src2, pmid, 5, Scalar(0, 0, 255), 2, 8, 0);
+		cv::circle(src2, paint1, 5, Scalar(0, 255, 0), 2, 8, 0);
+		cv::circle(src2, paint2, 5, Scalar(0, 255, 0), 2, 8, 0);
+		cv::circle(src2, paint3, 5, Scalar(0, 255, 0), 2, 8, 0);
 		double arrowWidth = 30;
-		arrowedLine(src2, paint1, Point2f(paint1.x - arrowWidth, paint1.y - (arrowWidth)* tan((line_model.angle - 90) / 180 * CV_PI)), Scalar(0, 0, 255), 2, LINE_AA, 0, 0.3);
-		arrowedLine(src2, paint2, Point2f(paint2.x - arrowWidth, paint2.y - (arrowWidth)* tan((line_model.angle - 90) / 180 * CV_PI)), Scalar(0, 0, 255), 2, LINE_AA, 0, 0.3);
-		arrowedLine(src2, paint3, Point2f(paint3.x - arrowWidth, paint3.y - (arrowWidth)* tan((line_match.angle - 90) / 180 * CV_PI)), Scalar(0, 0, 255), 2, LINE_AA, 0, 0.3);
-		arrowedLine(src2, paint4, Point2f(paint4.x - arrowWidth, paint4.y - (arrowWidth)* tan((line_match.angle - 90) / 180 * CV_PI)), Scalar(0, 0, 255), 2, LINE_AA, 0, 0.3);
-		imshow("line", src2);
-		waitKey(0);
+		//arrowedLine(src2, paint1, Point2f(paint1.x - arrowWidth, paint1.y - (arrowWidth)* tan((line_match.angle - 90) / 180 * CV_PI)), Scalar(0, 0, 255), 2, LINE_AA, 0, 0.3);
+		//arrowedLine(src2, paint2, Point2f(paint2.x - arrowWidth, paint2.y - (arrowWidth)* tan((line_match.angle - 90) / 180 * CV_PI)), Scalar(0, 0, 255), 2, LINE_AA, 0, 0.3);
+		//arrowedLine(src2, paint3, Point2f(paint3.x - arrowWidth, paint3.y - (arrowWidth)* tan((line_match.angle - 90) / 180 * CV_PI)), Scalar(0, 0, 255), 2, LINE_AA, 0, 0.3);
+		cv::imshow("line", src2);
+		cv::waitKey(0);
 #endif			
 	}
-	if (match_msgs.size() <= 0) {
-		LOG(ERRORL) << "match_msgs.size() <= 0错误";
-		throw exception((std::string(__FUNCTION__) + ":match_msgs.size() <= 0错误").c_str());
+	//if (match_msgs.size() <= 0) {
+	//	LOG(ERRORL) << "match_msgs.size() <= 0错误";
+	//	throw exception((std::string(__FUNCTION__) + ":match_msgs.size() <= 0错误").c_str());
+	//}
+	//string result_json = createMsgsToJSON(match_msgs);
+	//std::cout <<"result_json:"<< result_json << std::endl;
+	//std::memcpy(output_result_json, result_json.c_str(), result_json.length());
+	//return result_json.length() < 2 ? -1 : result_json.length();
+	if (groupPaintPoints.size() < 2)
+	{
+		if (groupPaintPoints.size() > 0)
+		{
+			PaintPoints paintPoints = groupPaintPoints[0];
+			if (paintPoints.points.size() < 1)
+			{
+				LOG(ERRORL) << "生成paintPoints错误";
+				throw exception((std::string(__FUNCTION__) + ":生成paintPoints错误").c_str());
+			}
+		}
+		else {
+			LOG(ERRORL) << "生成groupPaintPoints错误";
+			throw exception((std::string(__FUNCTION__) + ":生成groupPaintPoints错误").c_str());
+		}
 	}
-	string result_json = createMsgsToJSON(match_msgs);
-	std::cout <<"result_json:"<< result_json << std::endl;
+
+	char * jsonString = createLinesToJSON(groupPaintPoints);
+	cout << jsonString << endl;
+
+	string result_json_path = WorkFlowPath.length() > 0 ? (WorkFlowPath + "result_json" + ".key") : (savePath + "result_json" + ".key");
+	try
+	{
+		ofstream outfile(result_json_path, ios::binary);
+		outfile << jsonString;
+		outfile.close();
+	}
+	catch (const std::exception&)
+	{
+		result_json_path = "";
+	}
+
+	std::string result_json = jsonString;
 	std::memcpy(output_result_json, result_json.c_str(), result_json.length());
 	return result_json.length() < 2 ? -1 : result_json.length();
 }
@@ -385,9 +418,15 @@ int main()
 			std::cout << "intput cloud_file_str:" << std::endl;
 			std::cin >> cloud_file_str;
 			char* cloud_file = (char*)cloud_file_str.data();
-			char * model_file = "E:\\project\\AluminumProfileSpraying\\RangeImage\\build\\Release\\aluminum\\trainModel\\model.key";
+			char * model_name = "model";
 			char* json_result = new char[10000];
-			getMatchMsg(json_result,cloud_file, cloud_file, model_file);
+			try {
+				getMatchMsg(json_result, cloud_file, cloud_file, model_name);
+			}
+			catch (exception &e) {
+				cout << " 捕获了异常对象 " << e.what() << endl;
+			}
+			
 
 		}
 
